@@ -5,13 +5,13 @@ import ResultCard from './components/ResultCard';
 import AnalysisChart from './components/AnalysisChart';
 import GeminiAdvisor from './components/GeminiAdvisor';
 import ExchangeRateChart from './components/ExchangeRateChart';
-import { findOptimalQuantity } from './utils/calculations';
+import { findOptimalQuantity, calculateScenario } from './utils/calculations';
 
 const App: React.FC = () => {
   const [inputs, setInputs] = useState<Inputs>({
-    priceSteel: 3500, // Default estimate
-    pricePV: 600,     // Default estimate
-    priceCar: 85000,  // Default estimate
+    priceSteel: 3500,
+    pricePV: 600,
+    priceCar: 85000,
     exchangeRate: 7.1,
     freightCostUSD: 5000,
     balance: 500,     // 500 * 10k = 5,000,000
@@ -23,14 +23,45 @@ const App: React.FC = () => {
     destination: Destination.LA_NY,
   });
 
-  // Perform Calculations Automatically
-  const results = useMemo(() => {
+  // Store manual overrides for quantities: { STEEL: 100, PV: null, ... }
+  // null means "use recommended"
+  const [manualQuantities, setManualQuantities] = useState<Record<ProductType, number | null>>({
+    [ProductType.STEEL]: null,
+    [ProductType.PV]: null,
+    [ProductType.CAR]: null,
+  });
+
+  // 1. Calculate Optimal Baselines
+  const optimizationResults = useMemo(() => {
     return {
       steel: findOptimalQuantity(ProductType.STEEL, inputs),
       pv: findOptimalQuantity(ProductType.PV, inputs),
       car: findOptimalQuantity(ProductType.CAR, inputs),
     };
   }, [inputs]);
+
+  // 2. Compute "Displayed" Results (Manual Override vs Optimal)
+  const displayedResults = useMemo(() => {
+    const getResult = (type: ProductType, opt: any) => {
+        const manualQ = manualQuantities[type];
+        // If manual quantity exists and is valid (>0), recalculate.
+        if (manualQ !== null && manualQ > 0) {
+            return calculateScenario(manualQ, type, inputs);
+        }
+        // Otherwise return the optimal result calculated earlier
+        return opt?.optimal || null;
+    };
+
+    return {
+        steel: getResult(ProductType.STEEL, optimizationResults.steel),
+        pv: getResult(ProductType.PV, optimizationResults.pv),
+        car: getResult(ProductType.CAR, optimizationResults.car),
+    };
+  }, [inputs, optimizationResults, manualQuantities]);
+
+  const handleQuantityChange = (type: ProductType, val: number | null) => {
+    setManualQuantities(prev => ({ ...prev, [type]: val }));
+  };
 
   return (
     <div className="min-h-screen bg-slate-50 relative pb-12">
@@ -55,18 +86,36 @@ const App: React.FC = () => {
 
         {/* Top Level Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <ResultCard type={ProductType.STEEL} result={results.steel?.optimal || null} />
-          <ResultCard type={ProductType.PV} result={results.pv?.optimal || null} />
-          <ResultCard type={ProductType.CAR} result={results.car?.optimal || null} />
+          <ResultCard 
+            type={ProductType.STEEL} 
+            result={displayedResults.steel} 
+            recommendedQuantity={optimizationResults.steel?.optimal?.quantity || 0}
+            onQuantityChange={(v) => handleQuantityChange(ProductType.STEEL, v)}
+            isManual={manualQuantities[ProductType.STEEL] !== null}
+          />
+          <ResultCard 
+            type={ProductType.PV} 
+            result={displayedResults.pv} 
+            recommendedQuantity={optimizationResults.pv?.optimal?.quantity || 0}
+            onQuantityChange={(v) => handleQuantityChange(ProductType.PV, v)}
+            isManual={manualQuantities[ProductType.PV] !== null}
+          />
+          <ResultCard 
+            type={ProductType.CAR} 
+            result={displayedResults.car} 
+            recommendedQuantity={optimizationResults.car?.optimal?.quantity || 0}
+            onQuantityChange={(v) => handleQuantityChange(ProductType.CAR, v)}
+            isManual={manualQuantities[ProductType.CAR] !== null}
+          />
         </div>
 
         {/* AI Advisor Section */}
         <div className="mb-8">
            <GeminiAdvisor 
              results={{
-               steel: results.steel?.optimal || null,
-               pv: results.pv?.optimal || null,
-               car: results.car?.optimal || null
+               steel: displayedResults.steel,
+               pv: displayedResults.pv,
+               car: displayedResults.car
              }}
            />
         </div>
@@ -74,21 +123,21 @@ const App: React.FC = () => {
         {/* Charts & Deep Analysis */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
            <div className="lg:col-span-1">
-             <AnalysisChart data={results.steel?.dataPoints || []} label="钢铁 (Steel)" />
+             <AnalysisChart data={optimizationResults.steel?.dataPoints || []} label="钢铁 (Steel)" />
            </div>
            <div className="lg:col-span-1">
-             <AnalysisChart data={results.pv?.dataPoints || []} label="光伏 (PV)" />
+             <AnalysisChart data={optimizationResults.pv?.dataPoints || []} label="光伏 (PV)" />
            </div>
            <div className="lg:col-span-1">
-             <AnalysisChart data={results.car?.dataPoints || []} label="汽车 (Car)" />
+             <AnalysisChart data={optimizationResults.car?.dataPoints || []} label="汽车 (Car)" />
            </div>
         </div>
         
         <ExchangeRateChart 
           inputs={inputs} 
-          bestSteelQ={results.steel?.optimal?.quantity || 1}
-          bestPvQ={results.pv?.optimal?.quantity || 1}
-          bestCarQ={results.car?.optimal?.quantity || 1}
+          bestSteelQ={displayedResults.steel?.quantity || 1}
+          bestPvQ={displayedResults.pv?.quantity || 1}
+          bestCarQ={displayedResults.car?.quantity || 1}
         />
 
         {/* Detailed Logic Explanation Footer */}
