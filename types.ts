@@ -30,6 +30,7 @@ export interface CalculationResult {
   containerCount: number;
   containerType: '20ft' | '40ft';
   containerUtilization: number;
+  spareCapacity: number; // NEW: How many more units fit in the current container count
   totalFreightUSD: number;
   avgMiscRMB: number;
   N_USD: number; // Cost

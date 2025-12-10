@@ -52,10 +52,26 @@ const calculateLogistics = (q: number, type: ProductType, destination: Destinati
   const containerVol = isLargeDest ? VOL_40FT : VOL_20FT;
   const m = Math.ceil(totalVolume / containerVol);
   
+  // Calculate Spare Capacity
+  // 1. Capacity within existing boxes
+  const capacityInCurrentBoxes = numBoxes * itemsPerBox;
+  const spareInBoxes = capacityInCurrentBoxes - q;
+
+  // 2. Capacity for new boxes within existing containers
+  // Total volume available in m containers
+  const totalContainerVol = m * containerVol;
+  // How many boxes MAX fit in this total volume?
+  const maxBoxes = Math.floor(totalContainerVol / CARTON1_VOL);
+  // How many NEW boxes can we add?
+  const spareBoxes = Math.max(0, maxBoxes - numBoxes);
+  const spareFromNewBoxes = spareBoxes * itemsPerBox;
+
+  const spareCapacity = spareInBoxes + spareFromNewBoxes;
+
   const totalFreightUSD = m * freightCostUSD;
   const unitFreightUSD = q > 0 ? totalFreightUSD / q : 0;
 
-  return { m, totalFreightUSD, unitFreightUSD };
+  return { m, totalFreightUSD, unitFreightUSD, spareCapacity, containerVol, totalVolume };
 };
 
 export const calculateScenario = (
@@ -81,15 +97,10 @@ export const calculateScenario = (
   const x = getDiscountedPrice(type, basePrice, q);
   
   // Logistics
-  const { m, totalFreightUSD, unitFreightUSD: F_USD } = calculateLogistics(q, type, destination, d);
+  const { m, totalFreightUSD, unitFreightUSD: F_USD, spareCapacity, containerVol, totalVolume } = calculateLogistics(q, type, destination, d);
 
   // Utilization
-  const isLargeDest = destination === Destination.MIA_SEA;
-  const containerVol = isLargeDest ? VOL_40FT : VOL_20FT;
-  // Use re-derived volume logic for utilization accuracy
-  let itemsPerBox = type === ProductType.STEEL ? CAP_STEEL_C1 : type === ProductType.PV ? CAP_PV_C1 : CAP_CAR_C1;
-  const totalVolume = Math.ceil(q / itemsPerBox) * CARTON1_VOL;
-  const containerUtilization = (totalVolume / (m * containerVol)) * 100;
+  const containerUtilization = m > 0 ? (totalVolume / (m * containerVol)) * 100 : 0;
 
   const avgMiscRMB = MISC_FEE_RMB / q;
   const N_USD = (x + avgMiscRMB) / c;
@@ -113,8 +124,9 @@ export const calculateScenario = (
     quantity: q,
     unitPriceRMB: x,
     containerCount: m,
-    containerType: isLargeDest ? '40ft' : '20ft',
+    containerType: destination === Destination.MIA_SEA ? '40ft' : '20ft',
     containerUtilization,
+    spareCapacity,
     totalFreightUSD,
     avgMiscRMB,
     N_USD,

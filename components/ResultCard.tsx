@@ -1,6 +1,6 @@
 import React from 'react';
 import { CalculationResult, ProductType } from '../types';
-import { TrendingUp, Package, Ship } from 'lucide-react';
+import { TrendingUp, Package, Ship, Info } from 'lucide-react';
 
 interface Props {
   type: ProductType;
@@ -19,6 +19,7 @@ const ResultCard: React.FC<Props> = ({ type, result, recommendedQuantity, onQuan
   const titleColor = type === ProductType.CAR ? 'text-rose-600' : type === ProductType.PV ? 'text-amber-600' : 'text-cyan-600';
   const bgColor = type === ProductType.CAR ? 'bg-rose-50' : type === ProductType.PV ? 'bg-amber-50' : 'bg-cyan-50';
   const borderColor = type === ProductType.CAR ? 'border-rose-200' : type === ProductType.PV ? 'border-amber-200' : 'border-cyan-200';
+  const barColor = type === ProductType.CAR ? 'bg-rose-500' : type === ProductType.PV ? 'bg-amber-500' : 'bg-cyan-500';
 
   const typeName = type === ProductType.CAR ? '汽车 (Car)' : type === ProductType.PV ? '光伏 (PV)' : '钢铁 (Steel)';
 
@@ -90,21 +91,43 @@ const ResultCard: React.FC<Props> = ({ type, result, recommendedQuantity, onQuan
              </div>
           </div>
 
-          {/* Logistics */}
-          <div className="grid grid-cols-2 gap-2">
-              <div className="bg-white/40 p-2 rounded">
-                  <p className="text-xs text-slate-500 flex items-center gap-1"><Package className="w-3 h-3"/> 箱子/柜子</p>
-                  <p className="font-medium text-slate-700">{result.containerCount} 个 ({result.containerType})</p>
-                  <p className="text-[10px] text-slate-400">装载率: {result.containerUtilization.toFixed(1)}%</p>
+          {/* Logistics with Smart Progress Bar */}
+          <div className="bg-white/40 p-3 rounded-lg border border-black/5">
+              <div className="flex justify-between items-end mb-1">
+                  <p className="text-xs text-slate-500 flex items-center gap-1"><Package className="w-3 h-3"/> 货柜优化 ({result.containerType})</p>
+                  <p className="text-xs font-bold text-slate-700">{result.containerUtilization.toFixed(1)}% 饱和度</p>
               </div>
-              <div className="bg-white/40 p-2 rounded">
-                  <p className="text-xs text-slate-500 flex items-center gap-1"><Ship className="w-3 h-3"/> 总运费</p>
-                  <p className="font-medium text-slate-700">{fmtUSD(result.totalFreightUSD)}</p>
+              
+              <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden mb-2">
+                  <div 
+                    className={`h-full ${barColor} transition-all duration-500`} 
+                    style={{ width: `${Math.min(result.containerUtilization, 100)}%` }}
+                  ></div>
               </div>
+
+              <div className="flex justify-between text-[10px] text-slate-500 mb-2">
+                 <span>已用: {result.containerCount} 个柜</span>
+                 <span>总运费: {fmtUSD(result.totalFreightUSD)}</span>
+              </div>
+
+              {result.spareCapacity > 0 && (
+                <div className="flex items-start gap-1.5 bg-blue-50 text-blue-700 p-2 rounded text-[11px] border border-blue-100">
+                    <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <div>
+                        <span className="font-bold">优化建议:</span> 当前柜子还可装入 <span className="font-bold underline">{result.spareCapacity}</span> 件商品而不增加运费。
+                        <button 
+                            onClick={() => onQuantityChange(result.quantity + result.spareCapacity)}
+                            className="ml-1 text-blue-800 underline hover:text-blue-900 cursor-pointer"
+                        >
+                            一键填满
+                        </button>
+                    </div>
+                </div>
+              )}
           </div>
 
           {/* Price Breakdown Details */}
-          <div className="space-y-1 pt-2">
+          <div className="space-y-1 pt-1">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">单价详情 (Unit Metrics)</p>
               <div className="flex justify-between">
                   <span className="text-slate-600">国内买入价 (Discounted)</span>
