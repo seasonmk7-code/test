@@ -6,7 +6,6 @@ const VOL_20FT = 33; // m3
 const VOL_40FT = 67; // m3
 
 // Carton 1 Dimensions (meters) -> 5.5 * 2.8 * 3.55 = 54.67 m3
-// This seems very large for a "carton", but following prompt constraints strictly.
 const CARTON1_VOL = 5.5 * 2.8 * 3.55; 
 
 // Capacities per Carton 1
@@ -21,24 +20,42 @@ const getDiscountedPrice = (type: ProductType, basePrice: number, q: number): nu
   let multiplier = 1.0;
   
   if (type === ProductType.STEEL) {
-    // Annual > 800 (0.75), Forwarder > 500 (0.8), Batch > 400 (0.9)
-    // Priority usually goes to lowest price
     if (q > 800) multiplier = 0.75;
     else if (q > 500) multiplier = 0.8;
     else if (q > 400) multiplier = 0.9;
   } else if (type === ProductType.PV) {
-    // Annual > 2000 (0.7), Proxy > 1200 (0.8), Batch > 600 (0.9)
     if (q > 2000) multiplier = 0.7;
     else if (q > 1200) multiplier = 0.8;
     else if (q > 600) multiplier = 0.9;
   } else if (type === ProductType.CAR) {
-    // Annual > 30 (0.8), Proxy > 20 (0.85), Batch > 10 (0.9)
     if (q > 30) multiplier = 0.8;
     else if (q > 20) multiplier = 0.85;
     else if (q > 10) multiplier = 0.9;
   }
   
   return basePrice * multiplier;
+};
+
+/**
+ * Common logic to get container usage and freight
+ */
+const calculateLogistics = (q: number, type: ProductType, destination: Destination, freightCostUSD: number) => {
+  let itemsPerBox = 0;
+  if (type === ProductType.STEEL) itemsPerBox = CAP_STEEL_C1;
+  else if (type === ProductType.PV) itemsPerBox = CAP_PV_C1;
+  else itemsPerBox = CAP_CAR_C1;
+
+  const numBoxes = Math.ceil(q / itemsPerBox);
+  const totalVolume = numBoxes * CARTON1_VOL;
+  
+  const isLargeDest = destination === Destination.MIA_SEA;
+  const containerVol = isLargeDest ? VOL_40FT : VOL_20FT;
+  const m = Math.ceil(totalVolume / containerVol);
+  
+  const totalFreightUSD = m * freightCostUSD;
+  const unitFreightUSD = q > 0 ? totalFreightUSD / q : 0;
+
+  return { m, totalFreightUSD, unitFreightUSD };
 };
 
 export const calculateScenario = (
@@ -55,91 +72,42 @@ export const calculateScenario = (
     destination
   } = inputs;
 
-  // 1. Determine Base Price & Sell Price
   let basePrice = 0;
   let r = 0;
-  let itemsPerBox = 0;
+  if (type === ProductType.STEEL) { basePrice = priceSteel; r = sellPriceSteelUSD; }
+  else if (type === ProductType.PV) { basePrice = pricePV; r = sellPricePVUSD; }
+  else { basePrice = priceCar; r = sellPriceCarUSD; }
 
-  if (type === ProductType.STEEL) {
-    basePrice = priceSteel;
-    r = sellPriceSteelUSD;
-    itemsPerBox = CAP_STEEL_C1;
-  } else if (type === ProductType.PV) {
-    basePrice = pricePV;
-    r = sellPricePVUSD;
-    itemsPerBox = CAP_PV_C1;
-  } else {
-    basePrice = priceCar;
-    r = sellPriceCarUSD;
-    itemsPerBox = CAP_CAR_C1;
-  }
-
-  // 2. Discounted Price
   const x = getDiscountedPrice(type, basePrice, q);
-
-  // 3. Logistics
-  // Boxes needed. Prompt: "Req Boxes = Q / items_per_box". 
-  // We assume integer boxes needed.
-  const numBoxes = Math.ceil(q / itemsPerBox);
   
-  // Total Volume
-  const totalVolume = numBoxes * CARTON1_VOL;
-
-  // Container sizing
-  const isLargeDest = destination === Destination.MIA_SEA;
-  const containerVol = isLargeDest ? VOL_40FT : VOL_20FT;
-  
-  // Container Count (m). Prompt: "Directly use total volume / container volume (take integer)"
-  // Usually shipping requires ceiling, otherwise you leave goods behind.
-  const m = Math.ceil(totalVolume / containerVol);
+  // Logistics
+  const { m, totalFreightUSD, unitFreightUSD: F_USD } = calculateLogistics(q, type, destination, d);
 
   // Utilization
-  const usedVol = totalVolume;
-  const availVol = m * containerVol;
-  const containerUtilization = (usedVol / availVol) * 100;
+  const isLargeDest = destination === Destination.MIA_SEA;
+  const containerVol = isLargeDest ? VOL_40FT : VOL_20FT;
+  // Use re-derived volume logic for utilization accuracy
+  let itemsPerBox = type === ProductType.STEEL ? CAP_STEEL_C1 : type === ProductType.PV ? CAP_PV_C1 : CAP_CAR_C1;
+  const totalVolume = Math.ceil(q / itemsPerBox) * CARTON1_VOL;
+  const containerUtilization = (totalVolume / (m * containerVol)) * 100;
 
-  // 4. Costs
-  const totalFreightUSD = m * d; // Formula: Total Freight = m * d (assuming d is USD)
-  const Qmax = q; // The current quantity we are calculating for
-
-  // Average Misc (RMB)
-  const avgMiscRMB = MISC_FEE_RMB / Qmax;
-
-  // Domestic Unit Freight F (USD)
-  const F_USD = totalFreightUSD / Qmax;
-
-  // N (Domestic Cost USD approx) = (x + avgMisc) / c
+  const avgMiscRMB = MISC_FEE_RMB / q;
   const N_USD = (x + avgMiscRMB) / c;
-
-  // FOB (USD) = ((x + avgMisc) * (1 + k)) / c
   const FOB_USD = ((x + avgMiscRMB) * (1 + k)) / c;
-
-  // I (Insurance USD) = FOB * 0.033
   const I_USD = FOB_USD * 0.033;
-
-  // CFR (USD) = FOB + F
   const CFR_USD = FOB_USD + F_USD;
-
-  // CIF (USD) = CFR / 0.967
   const CIF_USD = CFR_USD / 0.967;
 
-  // Foreign Actual Price (USD) = FOB * (1 + 0.25) + I + F
   const foreignActualCostUSD = (FOB_USD * 1.25) + I_USD + F_USD;
 
-  // 5. Profits
-  // Domestic Unit Profit = (FOB - N) * 0.8
   const domesticUnitProfitUSD = (FOB_USD - N_USD) * 0.8;
-  const domesticTotalProfitUSD = domesticUnitProfitUSD * Qmax;
+  const domesticTotalProfitUSD = domesticUnitProfitUSD * q;
 
-  // Foreign Unit Profit = (r - foreignActualPrice) * 0.8
   const foreignUnitProfitUSD = (r - foreignActualCostUSD) * 0.8;
-  const foreignTotalProfitUSD = foreignUnitProfitUSD * Qmax;
+  const foreignTotalProfitUSD = foreignUnitProfitUSD * q;
 
-  // Total Joint Profit
   const jointTotalProfitUSD = domesticTotalProfitUSD + foreignTotalProfitUSD;
-  
-  // Domestic Total Cost (RMB) used for budget check
-  const domesticTotalCostRMB = q * x + MISC_FEE_RMB; // Simplified check: Goods cost + fixed misc
+  const domesticTotalCostRMB = q * x + MISC_FEE_RMB;
 
   return {
     quantity: q,
@@ -167,11 +135,8 @@ export const calculateScenario = (
 
 export const findOptimalQuantity = (type: ProductType, inputs: Inputs) => {
   const { balance, reserve, priceSteel, pricePV, priceCar } = inputs;
-  
-  // Total Budget RMB
   const budgetRMB = (balance - reserve) * 10000;
   
-  // Base price for max Q estimate
   let basePrice = 0;
   if (type === ProductType.STEEL) basePrice = priceSteel;
   else if (type === ProductType.PV) basePrice = pricePV;
@@ -179,36 +144,21 @@ export const findOptimalQuantity = (type: ProductType, inputs: Inputs) => {
 
   if (basePrice <= 0) return null;
 
-  // Rough Max Q (use base price, actual max Q might be higher due to discounts, 
-  // but we can just check budget constraint inside the loop)
-  // Discounts max out around 30% off, so let's multiply safe cap by 1.5 to be sure we cover discount ranges
   const safeMaxQ = Math.floor((budgetRMB / (basePrice * 0.7)) * 1.1) + 1; 
+  const iterationLimit = 10000; 
+  const effectiveLimit = Math.min(safeMaxQ, iterationLimit);
 
   let maxProfit = -Infinity;
   let optimalResult: CalculationResult | null = null;
   const dataPoints: CalculationResult[] = [];
 
-  // Enumerate
-  // For performance with large numbers, we might step, but for typical trade quantities (1-10000), JS is fast.
-  // If Q is massive (millions), we'd need a smarter search. Assuming reasonable B2B qty.
-  // Let's limit iteration to 10000 or budget limit.
-  
-  const iterationLimit = 10000; 
-  const effectiveLimit = Math.min(safeMaxQ, iterationLimit);
-
   for (let q = 1; q <= effectiveLimit; q++) {
     const res = calculateScenario(q, type, inputs);
-    
-    // Strict Budget Check
     if (res.domesticTotalCostRMB > budgetRMB) break;
-
-    // Optimization Target: Maximize Joint Total Profit
     if (res.jointTotalProfitUSD > maxProfit) {
       maxProfit = res.jointTotalProfitUSD;
       optimalResult = res;
     }
-    
-    // Save sparse data points for charts (every 10th or so if large)
     if (effectiveLimit < 200 || q % Math.ceil(effectiveLimit / 50) === 0) {
       dataPoints.push(res);
     }
@@ -219,4 +169,82 @@ export const findOptimalQuantity = (type: ProductType, inputs: Inputs) => {
     dataPoints,
     maxAffordableQ: effectiveLimit
   };
+};
+
+/**
+ * Calculates Foreign Buyer Metrics based on an arbitrary FOB quote and Quantity.
+ * Useful for "What-if" analysis from the buyer's perspective.
+ */
+export const calculateForeignMetrics = (
+  fob: number,
+  qty: number,
+  type: ProductType,
+  inputs: Inputs
+) => {
+  const { sellPriceSteelUSD, sellPricePVUSD, sellPriceCarUSD, freightCostUSD, destination } = inputs;
+
+  let sellPrice = 0;
+  if (type === ProductType.STEEL) sellPrice = sellPriceSteelUSD;
+  else if (type === ProductType.PV) sellPrice = sellPricePVUSD;
+  else sellPrice = sellPriceCarUSD;
+
+  // 1. Calculate Logistics to get Unit Freight
+  const { m, totalFreightUSD, unitFreightUSD: F_USD } = calculateLogistics(qty, type, destination, freightCostUSD);
+
+  // 2. Cost Structure
+  const I_USD = fob * 0.033;
+  // Standard assumption: Cost = FOB * 1.25 (Tariffs/Taxes) + Insurance + Freight
+  const unitCost = (fob * 1.25) + I_USD + F_USD;
+
+  // 3. Profit
+  // Assuming 0.8 factor for net profit after overhead/tax
+  const unitProfit = (sellPrice - unitCost) * 0.8;
+  const totalProfit = unitProfit * qty;
+
+  // 4. Margin (Profit Margin on Sales Revenue)
+  const margin = sellPrice > 0 ? unitProfit / sellPrice : 0;
+
+  return {
+    containerCount: m,
+    totalFreightUSD,
+    unitFreightUSD: F_USD,
+    insuranceUSD: I_USD,
+    unitCost,
+    unitProfit,
+    totalProfit,
+    margin,
+    F_USD
+  };
+};
+
+/**
+ * Calculates the Target FOB price required to achieve a specific Foreign Profit Margin (on Sales).
+ * 
+ * Formula derivation:
+ * NetProfit = (SellPrice - Cost) * 0.8
+ * TargetMargin = NetProfit / SellPrice
+ * -> TargetMargin * SellPrice = (SellPrice - Cost) * 0.8
+ * -> (TargetMargin * SellPrice) / 0.8 = SellPrice - Cost
+ * -> Cost = SellPrice - (TargetMargin * SellPrice / 0.8)
+ * 
+ * And Cost = FOB * 1.283 + F
+ * -> FOB = (Cost - F) / 1.283
+ */
+export const calculateTargetFOB = (
+    desiredMargin: number, // e.g. 0.20
+    sellPrice: number,
+    unitFreight: number
+): number => {
+    // 1. Calculate Allowable Cost
+    // If desiredMargin is too high, Cost might need to be negative (impossible)
+    const targetNetProfit = sellPrice * desiredMargin;
+    const targetCost = sellPrice - (targetNetProfit / 0.8);
+    
+    // 2. Solve for FOB
+    // Cost = FOB * (1.25 + 0.033) + F
+    const factor = 1.25 + 0.033; // 1.283
+    
+    const targetFOB = (targetCost - unitFreight) / factor;
+    
+    return targetFOB > 0 ? targetFOB : 0;
 };

@@ -8,9 +8,10 @@ interface Props {
   recommendedQuantity: number;
   onQuantityChange: (val: number | null) => void;
   isManual: boolean;
+  exchangeRate: number;
 }
 
-const ResultCard: React.FC<Props> = ({ type, result, recommendedQuantity, onQuantityChange, isManual }) => {
+const ResultCard: React.FC<Props> = ({ type, result, recommendedQuantity, onQuantityChange, isManual, exchangeRate }) => {
   const fmtUSD = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const fmtRMB = (n: number) => `¥${n.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const fmtNum = (n: number) => n.toLocaleString('en-US');
@@ -71,7 +72,12 @@ const ResultCard: React.FC<Props> = ({ type, result, recommendedQuantity, onQuan
              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-xs text-slate-500">国内总利润</p>
-                  <p className="font-bold text-green-600">{fmtUSD(result.domesticTotalProfitUSD)}</p>
+                  <div className="flex flex-col">
+                    <span className="font-bold text-green-600">{fmtUSD(result.domesticTotalProfitUSD)}</span>
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      ≈ {fmtRMB(result.domesticTotalProfitUSD * exchangeRate)}
+                    </span>
+                  </div>
                 </div>
                 <div>
                   <p className="text-xs text-slate-500">国外总利润</p>

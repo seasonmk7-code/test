@@ -5,6 +5,7 @@ import ResultCard from './components/ResultCard';
 import AnalysisChart from './components/AnalysisChart';
 import GeminiAdvisor from './components/GeminiAdvisor';
 import ExchangeRateChart from './components/ExchangeRateChart';
+import ForeignBuyerPanel from './components/ForeignBuyerPanel';
 import { findOptimalQuantity, calculateScenario } from './utils/calculations';
 
 const App: React.FC = () => {
@@ -92,6 +93,7 @@ const App: React.FC = () => {
             recommendedQuantity={optimizationResults.steel?.optimal?.quantity || 0}
             onQuantityChange={(v) => handleQuantityChange(ProductType.STEEL, v)}
             isManual={manualQuantities[ProductType.STEEL] !== null}
+            exchangeRate={inputs.exchangeRate}
           />
           <ResultCard 
             type={ProductType.PV} 
@@ -99,6 +101,7 @@ const App: React.FC = () => {
             recommendedQuantity={optimizationResults.pv?.optimal?.quantity || 0}
             onQuantityChange={(v) => handleQuantityChange(ProductType.PV, v)}
             isManual={manualQuantities[ProductType.PV] !== null}
+            exchangeRate={inputs.exchangeRate}
           />
           <ResultCard 
             type={ProductType.CAR} 
@@ -106,8 +109,12 @@ const App: React.FC = () => {
             recommendedQuantity={optimizationResults.car?.optimal?.quantity || 0}
             onQuantityChange={(v) => handleQuantityChange(ProductType.CAR, v)}
             isManual={manualQuantities[ProductType.CAR] !== null}
+            exchangeRate={inputs.exchangeRate}
           />
         </div>
+
+        {/* Foreign Buyer Section (New) */}
+        <ForeignBuyerPanel inputs={inputs} results={displayedResults} />
 
         {/* AI Advisor Section */}
         <div className="mb-8">
