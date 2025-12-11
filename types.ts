@@ -21,6 +21,7 @@ export interface Inputs {
   sellPriceSteelUSD: number; // r
   sellPricePVUSD: number; // r
   sellPriceCarUSD: number; // r
+  foreignBalance: number; // NEW: Foreign Buyer Budget in USD
   destination: Destination;
 }
 

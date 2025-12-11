@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Inputs, ProductType, CalculationResult } from '../types';
 import { calculateForeignMetrics, calculateTargetFOB, calculateDomesticProfitAtFOB } from '../utils/calculations';
-import { Briefcase, ArrowRight, Target, RefreshCw, Calculator, Container, Anchor, ShieldCheck, HandCoins, Search } from 'lucide-react';
+import { Briefcase, ArrowRight, Target, RefreshCw, Calculator, Container, Anchor, ShieldCheck, HandCoins, Search, Receipt, Wallet, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import CalculationDetailModal from './CalculationDetailModal';
 
 interface Props {
   inputs: Inputs;
+  setInputs: React.Dispatch<React.SetStateAction<Inputs>>;
   results: {
     steel: CalculationResult | null;
     pv: CalculationResult | null;
@@ -13,7 +14,7 @@ interface Props {
   };
 }
 
-const ForeignBuyerPanel: React.FC<Props> = ({ inputs, results }) => {
+const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
   const [localState, setLocalState] = useState<Record<ProductType, { fob: number; qty: number; desiredMargin: number }>>({
     [ProductType.STEEL]: { fob: 0, qty: 0, desiredMargin: 0.15 },
     [ProductType.PV]: { fob: 0, qty: 0, desiredMargin: 0.20 },
@@ -62,28 +63,26 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, results }) => {
     }
   };
 
+  const handleBudgetChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = parseFloat(e.target.value);
+      setInputs(prev => ({ ...prev, foreignBalance: isNaN(val) ? 0 : val }));
+  };
+
   // Helper to construct a temporary result object for the modal based on "What-if" values
   const getTempResultForModal = (type: ProductType): CalculationResult | null => {
       const { fob, qty } = localState[type];
       const metrics = calculateForeignMetrics(fob, qty, type, inputs);
       const domesticProfit = calculateDomesticProfitAtFOB(fob, qty, type, inputs);
       
-      // We construct a mock result just enough for the modal to render cost breakdowns
-      // Note: Some reverse engineering of RMB cost is needed if we want it perfect, 
-      // but for "Foreign Buyer" view, we mainly care about the USD breakdown which we have.
-      // However, to reuse the modal, we need to pass a compatible object.
-      
-      // Let's approximate the internal calculation to make the modal work seamlessly
-      // This is a bit of a hack to reuse the component, but effective for UX consistency
       const avgMiscRMB = 9000 / qty;
-      const x = (fob * inputs.exchangeRate) / (1 + inputs.margin) - avgMiscRMB; // Reverse engineer Unit Price RMB
+      const x = (fob * inputs.exchangeRate) / (1 + inputs.margin) - avgMiscRMB; 
       
       return {
           quantity: qty,
-          unitPriceRMB: x > 0 ? x : 0, // Approximate
+          unitPriceRMB: x > 0 ? x : 0, 
           containerCount: metrics.containerCount,
-          containerType: '40ft', // Simplified
-          containerUtilization: 0, // Not needed for profit modal
+          containerType: '40ft', 
+          containerUtilization: 0, 
           spareCapacity: 0,
           totalFreightUSD: metrics.totalFreightUSD,
           avgMiscRMB: avgMiscRMB,
@@ -109,7 +108,16 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, results }) => {
     const domesticProfitUSD = calculateDomesticProfitAtFOB(fob, qty, type, inputs);
     const targetFOB = calculateTargetFOB(desiredMargin, sellPrice, metrics.F_USD);
     
+    // Calculate Landed Costs
+    const targetLandedCost = targetFOB > 0 ? (targetFOB * 1.283) + metrics.unitFreightUSD : 0;
+    const totalLandedCost = metrics.unitCost * qty;
+    
+    // Affordability Check
+    const isAffordable = totalLandedCost <= inputs.foreignBalance;
+    const budgetDelta = inputs.foreignBalance - totalLandedCost;
+
     const fmtUSD = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fmtCompact = (n: number) => `$${(n/1000).toFixed(1)}k`;
     const fmtRMB = (n: number) => `¥${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
     return (
@@ -155,7 +163,7 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, results }) => {
                </div>
             </div>
 
-            {/* Logistics Info (New) */}
+            {/* Logistics Info */}
             <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500 px-1 mb-2">
                <div className="flex items-center gap-1">
                    <Container className="w-3 h-3 text-slate-600"/> 
@@ -167,7 +175,7 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, results }) => {
                </div>
             </div>
 
-            {/* Profit Simulation */}
+            {/* Profit Simulation & Cost Check */}
             <div className="bg-slate-900/60 rounded-lg p-4 text-sm space-y-3 border border-slate-700 mt-2 shadow-inner relative">
                {/* Click to view detail */}
                <button 
@@ -178,13 +186,35 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, results }) => {
                  <Search className="w-4 h-4"/>
                </button>
 
-               <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-800">
-                  <HandCoins className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs font-bold text-slate-300">双边利润模拟 (Profit Sim)</span>
+               {/* Budget Check Display (New Highlight) */}
+               <div className={`rounded-lg p-2 border ${isAffordable ? 'bg-emerald-950/30 border-emerald-800' : 'bg-rose-950/30 border-rose-800'} mb-2`}>
+                   <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total Landed Cost</span>
+                        {isAffordable ? 
+                            <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-500">
+                                <CheckCircle2 className="w-3 h-3"/> Budget OK
+                            </span> : 
+                            <span className="flex items-center gap-1 text-[10px] font-bold text-rose-500">
+                                <AlertTriangle className="w-3 h-3"/> Over Budget
+                            </span>
+                        }
+                   </div>
+                   <div className="flex items-end justify-between">
+                       <span className={`font-mono font-bold text-lg ${isAffordable ? 'text-white' : 'text-rose-200'}`}>
+                           {fmtUSD(totalLandedCost)}
+                       </span>
+                       <span className={`text-[10px] ${isAffordable ? 'text-emerald-400' : 'text-rose-400'}`}>
+                           {isAffordable ? '+' : ''}{fmtCompact(budgetDelta)}
+                       </span>
+                   </div>
+                   <div className="text-[9px] text-slate-500 mt-1 flex justify-between">
+                       <span>Unit: {fmtUSD(metrics.unitCost)}</span>
+                       <span>(Inc. Duty/Ins/Frt)</span>
+                   </div>
                </div>
                
-               {/* Foreign */}
-               <div className="flex justify-between items-center group/item">
+               {/* Foreign Profit */}
+               <div className="flex justify-between items-center group/item pt-2 border-t border-slate-800">
                   <span className="text-indigo-300 text-xs font-medium">🌍 买家 (Foreign)</span>
                   <div className="flex flex-col items-end">
                       <span className={`font-mono font-bold text-lg ${metrics.totalProfit > 0 ? 'text-indigo-400' : 'text-rose-400'}`}>
@@ -194,15 +224,12 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, results }) => {
                   </div>
                </div>
 
-               {/* Domestic */}
+               {/* Domestic Profit */}
                <div className="flex justify-between items-center pt-2 border-t border-slate-800/50">
                    <span className="text-emerald-300 text-xs font-medium">🇨🇳 卖家 (Domestic)</span>
                    <div className="flex flex-col items-end">
                        <span className={`font-mono font-bold text-lg ${domesticProfitUSD > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                            {fmtUSD(domesticProfitUSD)}
-                       </span>
-                       <span className="text-[10px] text-emerald-600/70">
-                           ≈ {fmtRMB(domesticProfitUSD * inputs.exchangeRate)}
                        </span>
                    </div>
                </div>
@@ -238,9 +265,12 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, results }) => {
                     <ArrowRight className="w-3.5 h-3.5 text-indigo-200" />
                 </div>
             </button>
-            {targetFOB <= 0 && (
-                <p className="text-[9px] text-rose-400 mt-1 text-center opacity-80">Target unreachable with current costs</p>
-            )}
+            
+            {/* Target Landed Cost Display */}
+            <div className="flex justify-between items-center mt-2 pt-2 border-t border-indigo-500/30">
+                <span className="text-[10px] text-indigo-300">Est. Landed Cost (含税费):</span>
+                <span className="font-mono font-bold text-xs text-indigo-100">{targetFOB > 0 ? fmtUSD(targetLandedCost) : '-'}</span>
+            </div>
          </div>
       </div>
     );
@@ -251,17 +281,31 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, results }) => {
       {/* Background decoration */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-slate-900 to-slate-900 pointer-events-none"></div>
 
-      <div className="relative p-8 border-b border-slate-800/80 flex flex-col md:flex-row items-start md:items-center gap-4 bg-slate-900/50 backdrop-blur-sm">
-        <div className="p-3 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl shadow-lg shadow-indigo-500/20">
-            <Briefcase className="w-8 h-8 text-white" />
+      <div className="relative p-8 border-b border-slate-800/80 flex flex-col md:flex-row items-center justify-between gap-6 bg-slate-900/50 backdrop-blur-sm">
+        <div className="flex items-center gap-4">
+            <div className="p-3 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl shadow-lg shadow-indigo-500/20">
+                <Briefcase className="w-8 h-8 text-white" />
+            </div>
+            <div>
+                <h2 className="text-2xl font-black text-white tracking-tight">国外买家模拟器 (Buyer Sandbox)</h2>
+                <p className="text-slate-400 text-sm mt-1">
+                    逆向推演国内卖家利润，制定双赢还价策略。
+                </p>
+            </div>
         </div>
-        <div>
-            <h2 className="text-2xl font-black text-white tracking-tight">国外买家模拟器 (Buyer Sandbox)</h2>
-            <p className="text-slate-400 text-sm mt-1 max-w-2xl">
-                逆向推演国内卖家利润，制定双赢还价策略。实时计算运费、关税及隐藏成本。
-                <br/>
-                <span className="text-indigo-400/80 text-xs">Simulate reverse profit margins and optimize counter-offers.</span>
-            </p>
+        
+        {/* Budget Controller */}
+        <div className="flex items-center gap-4 bg-black/30 p-3 rounded-xl border border-slate-700">
+             <div className="flex items-center gap-2 text-indigo-300">
+                 <Wallet className="w-5 h-5" />
+                 <span className="text-xs font-bold uppercase tracking-wider">国外采购预算 ($)</span>
+             </div>
+             <input 
+                 type="number"
+                 value={inputs.foreignBalance}
+                 onChange={handleBudgetChange}
+                 className="w-40 bg-slate-800 text-white font-mono font-bold text-lg border-b-2 border-slate-600 focus:border-indigo-500 outline-none text-right pb-1"
+             />
         </div>
       </div>
 
