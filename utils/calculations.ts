@@ -16,7 +16,7 @@ const CAP_CAR_C1 = 1;
 /**
  * Get discounted price based on quantity and type
  */
-const getDiscountedPrice = (type: ProductType, basePrice: number, q: number): number => {
+export const getDiscountedPrice = (type: ProductType, basePrice: number, q: number): number => {
   let multiplier = 1.0;
   
   if (type === ProductType.STEEL) {
@@ -39,7 +39,7 @@ const getDiscountedPrice = (type: ProductType, basePrice: number, q: number): nu
 /**
  * Common logic to get container usage and freight
  */
-const calculateLogistics = (q: number, type: ProductType, destination: Destination, freightCostUSD: number) => {
+export const calculateLogistics = (q: number, type: ProductType, destination: Destination, freightCostUSD: number) => {
   let itemsPerBox = 0;
   if (type === ProductType.STEEL) itemsPerBox = CAP_STEEL_C1;
   else if (type === ProductType.PV) itemsPerBox = CAP_PV_C1;
@@ -280,4 +280,35 @@ export const calculateTargetFOB = (
     const targetFOB = (targetCost - unitFreight) / factor;
     
     return targetFOB > 0 ? targetFOB : 0;
+};
+
+/**
+ * Finds the minimum Margin (k) required for Domestic Total Profit to be 
+ * at least 10% higher than Foreign Total Profit.
+ * Returns null if impossible within reasonable bounds.
+ */
+export const findDominantMargin = (
+  q: number,
+  type: ProductType,
+  inputs: Inputs
+): { requiredK: number; domesticProfit: number; foreignProfit: number } | null => {
+    // We iterate k from 0.0 to 2.0 (200% margin) to find the crossover point
+    // Logic: As k increases -> FOB increases -> Domestic Profit increases -> Foreign Profit decreases
+    
+    const tempInputs = { ...inputs };
+    
+    // Optimization: Binary search would be faster, but linear step is sufficient for UI smoothness here
+    for (let k = 0.01; k < 2.0; k += 0.01) {
+        tempInputs.margin = k;
+        const res = calculateScenario(q, type, tempInputs);
+        
+        if (res.domesticTotalProfitUSD > (res.foreignTotalProfitUSD * 1.1)) {
+            return {
+                requiredK: k,
+                domesticProfit: res.domesticTotalProfitUSD,
+                foreignProfit: res.foreignTotalProfitUSD
+            };
+        }
+    }
+    return null;
 };
