@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { CalculationResult, ProductType, Inputs } from '../types';
-import { TrendingUp, Package, Info, Search, Crown, ArrowUpRight, Container, DollarSign } from 'lucide-react';
+import { TrendingUp, Package, Info, Search, Crown, ArrowUpRight, Container, DollarSign, Tag } from 'lucide-react';
 import CalculationDetailModal from './CalculationDetailModal';
 import { findDominantMargin } from '../utils/calculations';
 
@@ -27,21 +27,24 @@ const ResultCard: React.FC<Props> = ({ type, result, recommendedQuantity, onQuan
           border: 'border-rose-200',
           title: 'text-rose-700',
           bar: 'bg-rose-500',
-          accent: 'ring-rose-200'
+          accent: 'ring-rose-200',
+          iconBg: 'bg-rose-100'
       },
       [ProductType.PV]: {
           bg: 'bg-gradient-to-br from-amber-50 to-white',
           border: 'border-amber-200',
           title: 'text-amber-700',
           bar: 'bg-amber-500',
-          accent: 'ring-amber-200'
+          accent: 'ring-amber-200',
+          iconBg: 'bg-amber-100'
       },
       [ProductType.STEEL]: {
           bg: 'bg-gradient-to-br from-cyan-50 to-white',
           border: 'border-cyan-200',
           title: 'text-cyan-700',
           bar: 'bg-cyan-500',
-          accent: 'ring-cyan-200'
+          accent: 'ring-cyan-200',
+          iconBg: 'bg-cyan-100'
       }
   }[type];
 
@@ -107,7 +110,7 @@ const ResultCard: React.FC<Props> = ({ type, result, recommendedQuantity, onQuan
       {!result ? (
         <div className="p-8 text-center text-slate-400 font-medium">输入数据以计算结果</div>
       ) : (
-        <div className="p-5 space-y-5">
+        <div className="p-5 space-y-4">
           {/* Key Profit Metrics */}
           <div className="bg-white/80 backdrop-blur-sm p-4 rounded-xl border border-white shadow-sm ring-1 ring-black/5">
              <div className="flex items-center gap-2 mb-3 text-slate-800 font-bold text-sm uppercase tracking-wide">
@@ -141,6 +144,17 @@ const ResultCard: React.FC<Props> = ({ type, result, recommendedQuantity, onQuan
                  <span className="text-xs font-semibold text-slate-500">总联合利润 (Joint Total)</span>
                  <span className="font-black text-slate-900 text-lg">{fmtUSD(result.jointTotalProfitUSD)}</span>
              </div>
+          </div>
+          
+          {/* FOB Price Display (NEW) */}
+          <div className="flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-slate-200 shadow-sm">
+             <div className="flex items-center gap-2">
+                <div className={`p-1.5 rounded-md ${theme.iconBg} ${theme.border} border`}>
+                    <DollarSign className={`w-4 h-4 ${theme.title}`} />
+                </div>
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wide">FOB 单价 (Unit Price)</span>
+             </div>
+             <span className={`text-2xl font-black ${theme.title}`}>{fmtUSD(result.FOB_USD)}</span>
           </div>
         
           {/* Smart Suggestion for Dominance */}
