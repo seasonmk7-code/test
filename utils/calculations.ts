@@ -230,17 +230,38 @@ export const calculateForeignMetrics = (
 };
 
 /**
+ * Calculates Domestic Seller Profit for a specific FOB price and Quantity.
+ * Used for reverse estimation during bargaining simulation.
+ */
+export const calculateDomesticProfitAtFOB = (
+  fob: number,
+  q: number,
+  type: ProductType,
+  inputs: Inputs
+): number => {
+    const { priceSteel, pricePV, priceCar, exchangeRate } = inputs;
+    
+    // Safety check for q
+    if (q <= 0) return 0;
+
+    let basePrice = 0;
+    if (type === ProductType.STEEL) basePrice = priceSteel;
+    else if (type === ProductType.PV) basePrice = pricePV;
+    else basePrice = priceCar;
+
+    const x = getDiscountedPrice(type, basePrice, q);
+    const avgMiscRMB = MISC_FEE_RMB / q;
+    
+    // Cost in USD (Break-even point)
+    const N_USD = (x + avgMiscRMB) / exchangeRate;
+    
+    // Domestic Profit = (FOB - Cost) * 0.8
+    const unitProfit = (fob - N_USD) * 0.8;
+    return unitProfit * q;
+};
+
+/**
  * Calculates the Target FOB price required to achieve a specific Foreign Profit Margin (on Sales).
- * 
- * Formula derivation:
- * NetProfit = (SellPrice - Cost) * 0.8
- * TargetMargin = NetProfit / SellPrice
- * -> TargetMargin * SellPrice = (SellPrice - Cost) * 0.8
- * -> (TargetMargin * SellPrice) / 0.8 = SellPrice - Cost
- * -> Cost = SellPrice - (TargetMargin * SellPrice / 0.8)
- * 
- * And Cost = FOB * 1.283 + F
- * -> FOB = (Cost - F) / 1.283
  */
 export const calculateTargetFOB = (
     desiredMargin: number, // e.g. 0.20

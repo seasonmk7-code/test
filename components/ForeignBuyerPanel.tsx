@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Inputs, ProductType, CalculationResult } from '../types';
-import { calculateForeignMetrics, calculateTargetFOB } from '../utils/calculations';
-import { Briefcase, ArrowRight, Target, RefreshCw, Calculator, Container, Anchor, ShieldCheck } from 'lucide-react';
+import { calculateForeignMetrics, calculateTargetFOB, calculateDomesticProfitAtFOB } from '../utils/calculations';
+import { Briefcase, ArrowRight, Target, RefreshCw, Calculator, Container, Anchor, ShieldCheck, HandCoins } from 'lucide-react';
 
 interface Props {
   inputs: Inputs;
@@ -68,13 +68,17 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, results }) => {
   const renderCard = (type: ProductType, label: string, colorClass: string, sellPrice: number) => {
     const { fob, qty, desiredMargin } = localState[type];
     
-    // 1. Calculate Metrics based on inputs
+    // 1. Calculate Foreign Metrics (Buyer Side)
     const metrics = calculateForeignMetrics(fob, qty, type, inputs);
+
+    // 2. Calculate Domestic Metrics (Seller Side) - REVERSE CHECK
+    const domesticProfitUSD = calculateDomesticProfitAtFOB(fob, qty, type, inputs);
     
-    // 2. Calculate Counter-Offer
+    // 3. Calculate Counter-Offer Strategy
     const targetFOB = calculateTargetFOB(desiredMargin, sellPrice, metrics.F_USD);
     
     const fmtUSD = (n: number) => `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const fmtRMB = (n: number) => `¥${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 
     return (
       <div className="bg-slate-800 rounded-xl p-5 border border-slate-700 shadow-lg relative overflow-hidden group flex flex-col h-full">
@@ -140,23 +144,35 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, results }) => {
                 </div>
             </div>
 
-            {/* Cost & Profit Summary */}
-            <div className="bg-slate-900/60 rounded p-3 text-sm space-y-2 border border-slate-700/50 mt-2">
-               <div className="flex justify-between">
-                  <span className="text-slate-500 text-xs">实际落地成本 (Landed Cost)</span>
-                  <span className="text-slate-300 font-mono text-xs">{fmtUSD(metrics.unitCost)}</span>
+            {/* Profit Simulation (Dual View) */}
+            <div className="bg-slate-900/80 rounded p-3 text-sm space-y-2 border border-slate-600 mt-2 shadow-inner">
+               <div className="flex items-center gap-2 mb-1 border-b border-slate-700 pb-1">
+                  <HandCoins className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-bold text-slate-300">讨价还价利润模拟 (Deal Simulation)</span>
                </div>
-               <div className="flex justify-between border-t border-slate-700/50 pt-2">
-                  <span className="text-slate-400 font-medium">预估总利润 (Profit)</span>
-                  <span className={`font-mono font-bold ${metrics.totalProfit > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                      ${metrics.totalProfit.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </span>
+               
+               {/* Foreign (Buyer) Profit */}
+               <div className="flex justify-between items-center">
+                  <span className="text-indigo-300 text-xs">🌍 国外买家总利润</span>
+                  <div className="flex flex-col items-end">
+                      <span className={`font-mono font-bold ${metrics.totalProfit > 0 ? 'text-indigo-400' : 'text-red-400'}`}>
+                          {fmtUSD(metrics.totalProfit)}
+                      </span>
+                      <span className="text-[10px] text-slate-500">Margin: {(metrics.margin * 100).toFixed(1)}%</span>
+                  </div>
                </div>
-               <div className="flex justify-between">
-                   <span className="text-slate-400 font-medium">当前利润率 (Margin)</span>
-                   <span className={`font-bold ${metrics.margin > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                       {(metrics.margin * 100).toFixed(1)}%
-                   </span>
+
+               {/* Domestic (Seller) Profit */}
+               <div className="flex justify-between items-center pt-1 border-t border-slate-800/50">
+                   <span className="text-emerald-300 text-xs">🇨🇳 国内卖家总利润</span>
+                   <div className="flex flex-col items-end">
+                       <span className={`font-mono font-bold ${domesticProfitUSD > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                           {fmtUSD(domesticProfitUSD)}
+                       </span>
+                       <span className="text-[10px] text-emerald-600/70">
+                           ≈ {fmtRMB(domesticProfitUSD * inputs.exchangeRate)}
+                       </span>
+                   </div>
                </div>
             </div>
          </div>
@@ -182,9 +198,13 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, results }) => {
                  </div>
             </div>
 
-            <div className="flex items-center justify-between bg-indigo-600 rounded p-2 shadow-md">
+            <div className="flex items-center justify-between bg-indigo-600 rounded p-2 shadow-md hover:bg-indigo-500 transition-colors cursor-pointer" 
+                 onClick={() => updateState(type, 'fob', parseFloat(targetFOB.toFixed(2)))}
+                 title="点击应用此推荐价格到模拟器中"
+            >
                 <div className="text-indigo-200 text-xs font-medium">推荐还价 (Target FOB)</div>
                 <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-indigo-200 opacity-60">(点击应用)</span>
                     <ArrowRight className="w-4 h-4 text-white" />
                     <span className="font-black text-lg text-white">{fmtUSD(targetFOB)}</span>
                 </div>

@@ -17,7 +17,8 @@ const GeminiAdvisor: React.FC<Props> = ({ results }) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const fetchAdvice = async () => {
+    // Debounce the API call to avoid hitting rate limits (429) when inputs change rapidly.
+    const timer = setTimeout(async () => {
       if (!results.steel || !results.pv || !results.car) return;
       if (!process.env.API_KEY) {
          setAdvice("Please configure the API_KEY environment variable to enable AI insights.");
@@ -49,15 +50,20 @@ const GeminiAdvisor: React.FC<Props> = ({ results }) => {
         });
 
         setAdvice(response.text);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Gemini API Error:", err);
-        setError("AI Service temporarily unavailable.");
+        // Handle Quota errors gracefully
+        if (err.message?.includes('429') || err.message?.includes('quota') || JSON.stringify(err).includes('RESOURCE_EXHAUSTED')) {
+             setError("AI Usage Limit Exceeded. Please try again in a few moments.");
+        } else {
+             setError("AI Service temporarily unavailable.");
+        }
       } finally {
         setLoading(false);
       }
-    };
+    }, 2000); // Wait 2 seconds after the last change before calling API
 
-    fetchAdvice();
+    return () => clearTimeout(timer);
   }, [results.steel, results.pv, results.car]);
 
   return (
@@ -80,9 +86,9 @@ const GeminiAdvisor: React.FC<Props> = ({ results }) => {
            </div>
         ) : (
           <div className="prose prose-invert prose-sm max-w-none">
-             {advice.split('\n').map((line, i) => (
+             {advice ? advice.split('\n').map((line, i) => (
                 <p key={i} className="mb-1 leading-relaxed">{line}</p>
-             ))}
+             )) : <span className="text-indigo-300/50">等待输入稳定...</span>}
           </div>
         )}
       </div>
