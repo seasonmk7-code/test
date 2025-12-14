@@ -113,6 +113,12 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
     const targetLandedCost = targetFOB > 0 ? (targetFOB * 1.283) + metrics.unitFreightUSD : 0;
     const totalLandedCost = metrics.unitCost * qty;
     
+    // Preview Calculations for Strategy
+    const targetDomesticProfit = calculateDomesticProfitAtFOB(targetFOB, qty, type, inputs);
+    const targetDomesticRevenue = targetFOB * qty;
+    const targetDomesticMargin = targetDomesticRevenue > 0 ? targetDomesticProfit / targetDomesticRevenue : 0;
+    const targetBuyerTotalProfit = (sellPrice * qty) * desiredMargin;
+
     // Affordability Check
     const isAffordable = totalLandedCost <= inputs.foreignBalance;
     const budgetDelta = inputs.foreignBalance - totalLandedCost;
@@ -187,7 +193,7 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
                  <Search className="w-4 h-4"/>
                </button>
 
-               {/* Budget Check Display (New Highlight) */}
+               {/* Budget Check Display */}
                <div className={`rounded-lg p-2 border ${isAffordable ? 'bg-emerald-950/30 border-emerald-800' : 'bg-rose-950/30 border-rose-800'} mb-2`}>
                    <div className="flex justify-between items-center mb-1">
                         <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">总落地成本 (Landed Cost)</span>
@@ -254,6 +260,28 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
                     />
                     <span className="text-[10px] text-slate-500 font-bold">%</span>
                  </div>
+            </div>
+
+            {/* Strategy Preview Grid */}
+            <div className="grid grid-cols-2 gap-2 mb-3">
+                <div className="bg-indigo-900/40 p-2 rounded border border-indigo-500/30">
+                    <div className="text-[9px] text-indigo-300 uppercase font-bold mb-1">买家预期 (Buyer)</div>
+                    <div className="flex justify-between items-end">
+                        <span className="text-white font-mono font-bold text-xs">{fmtCompact(targetBuyerTotalProfit)}</span>
+                        <span className="text-[10px] text-indigo-300">{(desiredMargin * 100).toFixed(0)}%</span>
+                    </div>
+                </div>
+                <div className="bg-emerald-900/40 p-2 rounded border border-emerald-500/30">
+                    <div className="text-[9px] text-emerald-300 uppercase font-bold mb-1">卖家预期 (Seller)</div>
+                    <div className="flex justify-between items-end">
+                        <span className={`font-mono font-bold text-xs ${targetDomesticProfit > 0 ? 'text-white' : 'text-rose-400'}`}>
+                            {fmtCompact(targetDomesticProfit)}
+                        </span>
+                        <span className={`text-[10px] ${targetDomesticProfit > 0 ? 'text-emerald-300' : 'text-rose-400'}`}>
+                            {(targetDomesticMargin * 100).toFixed(1)}%
+                        </span>
+                    </div>
+                </div>
             </div>
 
             <button 
