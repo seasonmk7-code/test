@@ -157,7 +157,8 @@ export const findOptimalQuantity = (type: ProductType, inputs: Inputs) => {
   if (basePrice <= 0) return null;
 
   const safeMaxQ = Math.floor((budgetRMB / (basePrice * 0.7)) * 1.1) + 1; 
-  const iterationLimit = 10000; 
+  // INCREASED LIMIT FROM 10,000 to 200,000 to support larger scale trade simulations
+  const iterationLimit = 200000; 
   const effectiveLimit = Math.min(safeMaxQ, iterationLimit);
 
   let maxProfit = -Infinity;
@@ -171,6 +172,7 @@ export const findOptimalQuantity = (type: ProductType, inputs: Inputs) => {
       maxProfit = res.jointTotalProfitUSD;
       optimalResult = res;
     }
+    // Adjust sampling rate so the chart doesn't get overcrowded regardless of limit
     if (effectiveLimit < 200 || q % Math.ceil(effectiveLimit / 50) === 0) {
       dataPoints.push(res);
     }

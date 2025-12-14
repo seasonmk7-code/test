@@ -65,7 +65,8 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
 
   const handleBudgetChange = (e: React.ChangeEvent<HTMLInputElement>) => {
       const val = parseFloat(e.target.value);
-      setInputs(prev => ({ ...prev, foreignBalance: isNaN(val) ? 0 : val }));
+      // Convert Ten Thousands to raw USD
+      setInputs(prev => ({ ...prev, foreignBalance: isNaN(val) ? 0 : val * 10000 }));
   };
 
   // Helper to construct a temporary result object for the modal based on "What-if" values
@@ -127,7 +128,7 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
          <div className="flex justify-between items-center mb-5 border-b border-slate-700 pb-3 relative z-10">
             <h3 className="font-bold text-white text-lg tracking-wide">{label}</h3>
             <span className="text-[11px] font-mono text-slate-400 bg-slate-900/80 px-2 py-1 rounded border border-slate-600">
-               Ref Price: <span className="text-white">${sellPrice}</span>
+               售价: <span className="text-white">${sellPrice}</span>
             </span>
          </div>
 
@@ -138,7 +139,7 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
                  <Calculator className="w-3 h-3" /> 模拟参数 (Parameters)
                </h4>
                <button onClick={() => handleSync(type)} className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors">
-                  <RefreshCw className="w-3 h-3" /> Sync Optimal
+                  <RefreshCw className="w-3 h-3" /> 同步最优 (Sync)
                </button>
             </div>
             
@@ -167,11 +168,11 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
             <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-500 px-1 mb-2">
                <div className="flex items-center gap-1">
                    <Container className="w-3 h-3 text-slate-600"/> 
-                   <span>Cnt: <span className="text-slate-300 font-mono">{metrics.containerCount}</span></span>
+                   <span>柜数: <span className="text-slate-300 font-mono">{metrics.containerCount}</span></span>
                </div>
                <div className="flex items-center gap-1 justify-end">
                    <Anchor className="w-3 h-3 text-slate-600"/>
-                   <span>Frt: <span className="text-slate-300 font-mono">{fmtUSD(metrics.totalFreightUSD)}</span></span>
+                   <span>运费: <span className="text-slate-300 font-mono">{fmtUSD(metrics.totalFreightUSD)}</span></span>
                </div>
             </div>
 
@@ -181,7 +182,7 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
                <button 
                   onClick={() => setModalType(type)}
                   className="absolute top-2 right-2 text-slate-600 hover:text-white transition-colors"
-                  title="View Calculation Breakdown"
+                  title="查看详细计算过程 (Details)"
                >
                  <Search className="w-4 h-4"/>
                </button>
@@ -189,13 +190,13 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
                {/* Budget Check Display (New Highlight) */}
                <div className={`rounded-lg p-2 border ${isAffordable ? 'bg-emerald-950/30 border-emerald-800' : 'bg-rose-950/30 border-rose-800'} mb-2`}>
                    <div className="flex justify-between items-center mb-1">
-                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total Landed Cost</span>
+                        <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">总落地成本 (Landed Cost)</span>
                         {isAffordable ? 
                             <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-500">
-                                <CheckCircle2 className="w-3 h-3"/> Budget OK
+                                <CheckCircle2 className="w-3 h-3"/> 预算充足 (OK)
                             </span> : 
                             <span className="flex items-center gap-1 text-[10px] font-bold text-rose-500">
-                                <AlertTriangle className="w-3 h-3"/> Over Budget
+                                <AlertTriangle className="w-3 h-3"/> 超出预算 (Over)
                             </span>
                         }
                    </div>
@@ -208,8 +209,8 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
                        </span>
                    </div>
                    <div className="text-[9px] text-slate-500 mt-1 flex justify-between">
-                       <span>Unit: {fmtUSD(metrics.unitCost)}</span>
-                       <span>(Inc. Duty/Ins/Frt)</span>
+                       <span>单价: {fmtUSD(metrics.unitCost)}</span>
+                       <span>(含税/保/运)</span>
                    </div>
                </div>
                
@@ -220,7 +221,7 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
                       <span className={`font-mono font-bold text-lg ${metrics.totalProfit > 0 ? 'text-indigo-400' : 'text-rose-400'}`}>
                           {fmtUSD(metrics.totalProfit)}
                       </span>
-                      <span className="text-[10px] text-slate-500">Margin: {(metrics.margin * 100).toFixed(1)}%</span>
+                      <span className="text-[10px] text-slate-500">利润率: {(metrics.margin * 100).toFixed(1)}%</span>
                   </div>
                </div>
 
@@ -241,7 +242,7 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
             <div className="flex items-center justify-between mb-2">
                  <div className="flex items-center gap-2">
                     <Target className="w-3.5 h-3.5 text-indigo-400" />
-                    <span className="text-[11px] font-bold text-indigo-200 uppercase">Target Margin</span>
+                    <span className="text-[11px] font-bold text-indigo-200 uppercase">目标利润率 (Margin)</span>
                  </div>
                  <div className="flex items-center gap-1 bg-slate-900 rounded px-2 py-0.5 border border-slate-700">
                     <input 
@@ -259,7 +260,7 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
                  className="w-full flex items-center justify-between bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 rounded p-2 transition-all shadow-md group/btn" 
                  onClick={() => updateState(type, 'fob', parseFloat(targetFOB.toFixed(2)))}
             >
-                <div className="text-indigo-100 text-xs font-medium">Apply Recommendation</div>
+                <div className="text-indigo-100 text-xs font-medium">应用建议 (Apply)</div>
                 <div className="flex items-center gap-2">
                     <span className="font-mono font-black text-white group-hover/btn:scale-110 transition-transform">{fmtUSD(targetFOB)}</span>
                     <ArrowRight className="w-3.5 h-3.5 text-indigo-200" />
@@ -268,7 +269,7 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
             
             {/* Target Landed Cost Display */}
             <div className="flex justify-between items-center mt-2 pt-2 border-t border-indigo-500/30">
-                <span className="text-[10px] text-indigo-300">Est. Landed Cost (含税费):</span>
+                <span className="text-[10px] text-indigo-300">预估落地成本 (Est. Cost):</span>
                 <span className="font-mono font-bold text-xs text-indigo-100">{targetFOB > 0 ? fmtUSD(targetLandedCost) : '-'}</span>
             </div>
          </div>
@@ -298,14 +299,19 @@ const ForeignBuyerPanel: React.FC<Props> = ({ inputs, setInputs, results }) => {
         <div className="flex items-center gap-4 bg-black/30 p-3 rounded-xl border border-slate-700">
              <div className="flex items-center gap-2 text-indigo-300">
                  <Wallet className="w-5 h-5" />
-                 <span className="text-xs font-bold uppercase tracking-wider">国外采购预算 ($)</span>
+                 <span className="text-xs font-bold uppercase tracking-wider">国外采购预算 (万美元)</span>
              </div>
-             <input 
-                 type="number"
-                 value={inputs.foreignBalance}
-                 onChange={handleBudgetChange}
-                 className="w-40 bg-slate-800 text-white font-mono font-bold text-lg border-b-2 border-slate-600 focus:border-indigo-500 outline-none text-right pb-1"
-             />
+             <div className="flex items-center">
+                 <span className="text-white font-mono text-lg mr-1">$</span>
+                 <input 
+                     type="number"
+                     step="1"
+                     value={inputs.foreignBalance / 10000}
+                     onChange={handleBudgetChange}
+                     className="w-24 bg-slate-800 text-white font-mono font-bold text-lg border-b-2 border-slate-600 focus:border-indigo-500 outline-none text-right pb-1"
+                 />
+                 <span className="text-white font-mono text-lg ml-1">万</span>
+             </div>
         </div>
       </div>
 
